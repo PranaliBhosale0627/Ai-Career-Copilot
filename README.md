@@ -1,5 +1,4 @@
-# CareerCo-pilot (Separated Frontend and Backend)
-
+# CareerCo-pilot
 This project has been split into a dedicated frontend and backend folder architecture.
 
 ## Folder Structure
