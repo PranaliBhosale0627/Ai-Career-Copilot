@@ -7,9 +7,9 @@ import ResumeAnalysisView from "./components/ResumeAnalysisView";
 import RoadmapView from "./components/RoadmapView";
 import PipelineView from "./components/PipelineView";
 import SettingsView from "./components/SettingsView";
-import { UserProfile, PipelineJob, RoadmapStep, ResumeAnalysis, ChatMessage } from "./types";
+import { AuthAccount, DashboardSummary, UserProfile, PipelineJob, RoadmapStep, ResumeAnalysis, ChatMessage } from "./types";
 import { Sparkles, Loader2 } from "lucide-react";
-import { apiFetch } from "./lib/api";
+import { apiFetch, clearAuthToken, getAuthToken, onUnauthorized, setAuthToken } from "./lib/api";
 
 export default function App() {
   // Session / Navigation States
@@ -21,32 +21,66 @@ export default function App() {
   const [jobs, setJobs] = useState<PipelineJob[]>([]);
   const [roadmap, setRoadmap] = useState<RoadmapStep[]>([]);
   const [resumeAnalysis, setResumeAnalysis] = useState<ResumeAnalysis | null>(null);
+  const [account, setAccount] = useState<AuthAccount | null>(null);
+  const [dashboardSummary, setDashboardSummary] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Sync data from Express API
+  async function loadWorkspaceData() {
+    const [userRes, jobsRes, roadmapRes, resumeRes, summaryRes] = await Promise.all([
+      apiFetch("/api/user"),
+      apiFetch("/api/jobs"),
+      apiFetch("/api/roadmap"),
+      apiFetch("/api/resume/analysis"),
+      apiFetch("/api/user/dashboard")
+    ]);
+
+    if (!userRes.ok || !jobsRes.ok || !roadmapRes.ok || !resumeRes.ok) {
+      throw new Error("Workspace data failed to load.");
+    }
+
+    setUser(await userRes.json());
+    setJobs(await jobsRes.json());
+    setRoadmap(await roadmapRes.json());
+    setResumeAnalysis(await resumeRes.json());
+    if (summaryRes.ok) {
+      setDashboardSummary(await summaryRes.json());
+    }
+  }
+
+  async function refreshDashboardSummary() {
+    const summaryRes = await apiFetch("/api/user/dashboard");
+    if (summaryRes.ok) {
+      setDashboardSummary(await summaryRes.json());
+    }
+  }
+
+  // Sync data from authenticated Express API
   useEffect(() => {
+    onUnauthorized(() => {
+      setAccount(null);
+      setUser(null);
+      setCurrentScreen("auth");
+      setCurrentView("dashboard");
+    });
+
     async function fetchAllData() {
+      const token = getAuthToken();
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
       try {
-        const [userRes, jobsRes, roadmapRes, resumeRes] = await Promise.all([
-          apiFetch("/api/user"),
-          apiFetch("/api/jobs"),
-          apiFetch("/api/roadmap"),
-          apiFetch("/api/resume/analysis")
-        ]);
-
-        if (userRes.ok && jobsRes.ok && roadmapRes.ok && resumeRes.ok) {
-          const userData = await userRes.json();
-          const jobsData = await jobsRes.json();
-          const roadmapData = await roadmapRes.json();
-          const resumeData = await resumeRes.json();
-
-          setUser(userData);
-          setJobs(jobsData);
-          setRoadmap(roadmapData);
-          setResumeAnalysis(resumeData);
+        const sessionRes = await apiFetch("/api/auth/me");
+        if (sessionRes.ok) {
+          const session = await sessionRes.json();
+          setAccount(session.user);
+          await loadWorkspaceData();
+          setCurrentScreen("workspace");
         }
       } catch (err) {
         console.error("Failed to load initial workspace data:", err);
+        clearAuthToken();
       } finally {
         setLoading(false);
       }
@@ -55,44 +89,61 @@ export default function App() {
   }, []);
 
   // Auth Action handlers
-  const handleSignIn = async (name: string, email: string) => {
+  const handleSignIn = async (_name: string, email: string, password: string) => {
     try {
-      const [userRes, jobsRes, roadmapRes, resumeRes] = await Promise.all([
-        apiFetch("/api/user"),
-        apiFetch("/api/jobs"),
-        apiFetch("/api/roadmap"),
-        apiFetch("/api/resume/analysis")
-      ]);
-
-      if (userRes.ok && jobsRes.ok && roadmapRes.ok && resumeRes.ok) {
-        setUser(await userRes.json());
-        setJobs(await jobsRes.json());
-        setRoadmap(await roadmapRes.json());
-        setResumeAnalysis(await resumeRes.json());
-      }
-    } catch (err) {
-      console.error("Failed to login user:", err);
-    }
-    setCurrentScreen("workspace");
-    setCurrentView("dashboard");
-  };
-
-  const handleSignUp = async (name: string, email: string): Promise<boolean> => {
-    try {
-      const signUpRes = await apiFetch("/api/user/signup", {
+      const res = await apiFetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email })
+        body: JSON.stringify({ email, password })
       });
-      return signUpRes.ok;
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Login failed.");
+      }
+      setAuthToken(data.token);
+      setAccount(data.user);
+      await loadWorkspaceData();
+      setCurrentScreen("workspace");
+      setCurrentView("dashboard");
+    } catch (err) {
+      console.error("Failed to login user:", err);
+      alert(err instanceof Error ? err.message : "Login failed. Please try again.");
+    }
+  };
+
+  const handleSignUp = async (name: string, email: string, password: string): Promise<boolean> => {
+    try {
+      const signUpRes = await apiFetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password })
+      });
+      const data = await signUpRes.json();
+      if (!signUpRes.ok) {
+        throw new Error(data.error || "Sign up failed.");
+      }
+      setAuthToken(data.token);
+      setAccount(data.user);
+      await loadWorkspaceData();
+      setCurrentScreen("workspace");
+      setCurrentView("dashboard");
+      return true;
     } catch (err) {
       console.error("Failed to sign up new user:", err);
+      alert(err instanceof Error ? err.message : "Sign up failed. Please try again.");
       return false;
     }
   };
 
   const handleSignOut = () => {
-    setCurrentScreen("landing");
+    clearAuthToken();
+    setAccount(null);
+    setUser(null);
+    setJobs([]);
+    setRoadmap([]);
+    setResumeAnalysis(null);
+    setDashboardSummary(null);
+    setCurrentScreen("auth");
     setCurrentView("dashboard");
   };
 
@@ -148,6 +199,7 @@ export default function App() {
     if (jobsFetch.ok) {
       setJobs(await jobsFetch.json());
     }
+    await refreshDashboardSummary();
     return data.coverLetter;
   };
 
@@ -172,6 +224,7 @@ export default function App() {
     });
     const result = await res.json();
     setResumeAnalysis(result);
+    await refreshDashboardSummary();
     return result;
   };
 
@@ -222,6 +275,8 @@ export default function App() {
         return (
           <DashboardView 
             user={user!} 
+            account={account!}
+            summary={dashboardSummary}
             onNavigate={(view) => setCurrentView(view)} 
             onAddJobToPipeline={handleAddJobFromDashboard}
           />
@@ -256,6 +311,22 @@ export default function App() {
           <SettingsView 
             initialUser={user!} 
             onSaveProfile={handleSaveProfile}
+          />
+        );
+      case "profile":
+      case "advisor":
+      case "portfolio":
+      case "interview":
+      case "documents":
+      case "activity":
+        return (
+          <DashboardView
+            user={user!}
+            account={account!}
+            summary={dashboardSummary}
+            mode={currentView}
+            onNavigate={(view) => setCurrentView(view)}
+            onAddJobToPipeline={handleAddJobFromDashboard}
           />
         );
       default:

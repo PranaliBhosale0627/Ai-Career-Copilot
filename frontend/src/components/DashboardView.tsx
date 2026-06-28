@@ -12,16 +12,19 @@ import {
   Briefcase,
   Sparkles
 } from "lucide-react";
-import { UserProfile, JobMatch } from "../types";
+import { AuthAccount, DashboardSummary, UserProfile, JobMatch } from "../types";
 import JobFitExplainerModal from "./JobFitExplainerModal";
 
 interface DashboardViewProps {
   user: UserProfile;
+  account: AuthAccount;
+  summary: DashboardSummary | null;
+  mode?: string;
   onNavigate: (view: string) => void;
   onAddJobToPipeline: (role: string, company: string, salary: string, location: string) => void;
 }
 
-export default function DashboardView({ user, onNavigate, onAddJobToPipeline }: DashboardViewProps) {
+export default function DashboardView({ user, account, summary, mode = "dashboard", onNavigate, onAddJobToPipeline }: DashboardViewProps) {
   const [hoveredPoint, setHoveredPoint] = useState<number | null>(null);
   
   // AI Job Fit Explainer States
@@ -89,6 +92,99 @@ export default function DashboardView({ user, onNavigate, onAddJobToPipeline }: 
     day: "numeric"
   });
 
+  const stats = summary?.stats || {
+    resumesCreated: 0,
+    portfoliosGenerated: 0,
+    interviewSessionsCompleted: 0,
+    roadmapsCreated: 0
+  };
+
+  if (mode !== "dashboard") {
+    const titleMap: Record<string, string> = {
+      profile: "Profile",
+      advisor: "AI Career Advisor",
+      portfolio: "Portfolio Generator",
+      interview: "Interview Preparation",
+      documents: "Saved Documents",
+      activity: "Activity History"
+    };
+
+    return (
+      <div id={`${mode}-view`} className="space-y-8 animate-fade-in">
+        <div className="relative overflow-hidden rounded-2xl border border-white/60 bg-white/75 backdrop-blur-xl p-6 shadow-sm">
+          <span className="text-xs text-indigo-600 font-bold uppercase tracking-wider font-mono">PRIVATE WORKSPACE</span>
+          <h2 className="font-display text-2xl sm:text-3xl font-bold text-slate-900 mt-1">
+            {titleMap[mode] || "Dashboard"}
+          </h2>
+          <p className="text-sm text-slate-500 mt-1">
+            Signed in as {account.email}. Everything shown here belongs only to this account.
+          </p>
+        </div>
+
+        {mode === "profile" && (
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm flex flex-col sm:flex-row gap-5 items-start">
+            <img src={user.avatar} alt={user.name} className="w-20 h-20 rounded-2xl object-cover ring-2 ring-indigo-500/30" referrerPolicy="no-referrer" />
+            <div className="space-y-2">
+              <h3 className="font-display text-xl font-bold text-slate-900">{user.name}</h3>
+              <p className="text-sm font-semibold text-indigo-600">{user.title}</p>
+              <p className="text-sm text-slate-500 max-w-2xl">{user.bio}</p>
+              <button onClick={() => onNavigate("settings")} className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-semibold">Edit Profile</button>
+            </div>
+          </div>
+        )}
+
+        {mode === "documents" && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {(summary?.generatedDocuments || []).map((doc) => (
+              <div key={doc.id} className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm">
+                <span className="text-[10px] text-indigo-600 font-bold uppercase font-mono">{doc.type}</span>
+                <h3 className="font-display text-sm font-bold text-slate-900 mt-1">{doc.title}</h3>
+                <p className="text-xs text-slate-400 mt-2">{new Date(doc.createdAt).toLocaleString()}</p>
+              </div>
+            ))}
+            {(!summary?.generatedDocuments || summary.generatedDocuments.length === 0) && (
+              <div className="bg-white border border-dashed border-slate-200 rounded-2xl p-10 text-center text-sm text-slate-400">
+                No generated documents yet. Create a resume analysis or cover letter to see it here.
+              </div>
+            )}
+          </div>
+        )}
+
+        {mode === "activity" && (
+          <div className="bg-white border border-slate-200/80 rounded-2xl shadow-sm divide-y divide-slate-100">
+            {(summary?.activityHistory || []).map((item) => (
+              <div key={item.id} className="p-5 flex gap-3">
+                <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 mt-1.5" />
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">{item.title}</h3>
+                  <p className="text-xs text-slate-500 mt-1">{item.description}</p>
+                  <p className="text-[10px] text-slate-400 mt-2 font-mono">{new Date(item.createdAt).toLocaleString()}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {["advisor", "portfolio", "interview"].includes(mode) && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <button onClick={() => onNavigate("resume")} className="bg-white border border-slate-200/80 rounded-2xl p-6 text-left shadow-sm hover:shadow-md transition-all">
+              <span className="text-xs font-mono font-bold text-indigo-600 uppercase">Resume</span>
+              <h3 className="font-display font-bold text-slate-900 mt-2">Generate or improve a resume</h3>
+            </button>
+            <button onClick={() => onNavigate("roadmap")} className="bg-white border border-slate-200/80 rounded-2xl p-6 text-left shadow-sm hover:shadow-md transition-all">
+              <span className="text-xs font-mono font-bold text-indigo-600 uppercase">Roadmap</span>
+              <h3 className="font-display font-bold text-slate-900 mt-2">Continue your career roadmap</h3>
+            </button>
+            <button onClick={() => onNavigate("pipeline")} className="bg-white border border-slate-200/80 rounded-2xl p-6 text-left shadow-sm hover:shadow-md transition-all">
+              <span className="text-xs font-mono font-bold text-indigo-600 uppercase">Pipeline</span>
+              <h3 className="font-display font-bold text-slate-900 mt-2">Review saved job opportunities</h3>
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div id="dashboard-view" className="space-y-8 animate-fade-in">
       
@@ -100,7 +196,7 @@ export default function DashboardView({ user, onNavigate, onAddJobToPipeline }: 
             Good Morning, {user.name.split(" ")[0]}!
           </h2>
           <p className="text-sm text-slate-500 mt-1">
-            Today is {currentDateString}. Your profile optimization status is looking strong.
+            Today is {currentDateString}. Your private career workspace is synced to {account.email}.
           </p>
         </div>
         
@@ -126,7 +222,7 @@ export default function DashboardView({ user, onNavigate, onAddJobToPipeline }: 
             <div>
               <span className="text-xs font-semibold text-slate-500 uppercase font-mono">ATS Resume Score</span>
               <p className="text-3xl font-bold text-slate-950 font-display mt-2 group-hover:text-indigo-600 transition-colors">
-                78<span className="text-slate-400 text-lg font-normal">/100</span>
+                {stats.resumesCreated}<span className="text-slate-400 text-lg font-normal"> resumes</span>
               </p>
             </div>
             <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
@@ -152,9 +248,9 @@ export default function DashboardView({ user, onNavigate, onAddJobToPipeline }: 
         <div className="bg-white border border-slate-200/80 p-6 rounded-2xl shadow-sm flex flex-col justify-between hover:shadow-md transition-all">
           <div className="flex justify-between items-start">
             <div>
-              <span className="text-xs font-semibold text-slate-500 uppercase font-mono">Job Matches</span>
+              <span className="text-xs font-semibold text-slate-500 uppercase font-mono">Portfolios</span>
               <p className="text-3xl font-bold text-slate-950 font-display mt-2">
-                24 <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">+4 new</span>
+                {stats.portfoliosGenerated} <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">generated</span>
               </p>
             </div>
             <div className="p-3 bg-sky-50 text-sky-600 rounded-xl">
@@ -178,9 +274,9 @@ export default function DashboardView({ user, onNavigate, onAddJobToPipeline }: 
         <div className="bg-white border border-slate-200/80 p-6 rounded-2xl shadow-sm flex flex-col justify-between hover:shadow-md transition-all">
           <div className="flex justify-between items-start">
             <div>
-              <span className="text-xs font-semibold text-slate-500 uppercase font-mono">Skills Mastered</span>
+              <span className="text-xs font-semibold text-slate-500 uppercase font-mono">Interviews</span>
               <p className="text-3xl font-bold text-slate-950 font-display mt-2">
-                12<span className="text-slate-400 text-lg font-normal">/18</span>
+                {stats.interviewSessionsCompleted}<span className="text-slate-400 text-lg font-normal"> sessions</span>
               </p>
             </div>
             <div className="p-3 bg-purple-50 text-purple-600 rounded-xl">
@@ -202,9 +298,9 @@ export default function DashboardView({ user, onNavigate, onAddJobToPipeline }: 
         <div className="bg-white border border-slate-200/80 p-6 rounded-2xl shadow-sm flex flex-col justify-between hover:shadow-md transition-all">
           <div className="flex justify-between items-start">
             <div>
-              <span className="text-xs font-semibold text-slate-500 uppercase font-mono">Growth Level</span>
+              <span className="text-xs font-semibold text-slate-500 uppercase font-mono">Roadmaps</span>
               <p className="text-3xl font-bold text-slate-950 font-display mt-2">
-                Elite II
+                {stats.roadmapsCreated}
               </p>
             </div>
             <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">

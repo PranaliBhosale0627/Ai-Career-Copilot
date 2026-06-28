@@ -2,8 +2,8 @@ import React, { useState } from "react";
 import { Sparkles, Mail, Lock, User, ArrowRight, Star, ShieldCheck } from "lucide-react";
 
 interface AuthPageProps {
-  onSignIn: (name: string, email: string) => Promise<void>;
-  onSignUp: (name: string, email: string) => Promise<boolean>;
+  onSignIn: (name: string, email: string, password: string) => Promise<void>;
+  onSignUp: (name: string, email: string, password: string) => Promise<boolean>;
   onBack: () => void;
 }
 
@@ -12,19 +12,19 @@ export default function AuthPage({ onSignIn, onSignUp, onBack }: AuthPageProps) 
   const [email, setEmail] = useState("alex.mercer@gmail.com");
   const [name, setName] = useState("Alex Mercer");
   const [password, setPassword] = useState("password123");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSignUp) {
-      const success = await onSignUp(name, email);
-      if (success) {
-        alert("Account created successfully! Please sign in with your email.");
-        setIsSignUp(false); // Switch to Sign In tab!
+    setIsSubmitting(true);
+    try {
+      if (isSignUp) {
+        await onSignUp(name, email, password);
       } else {
-        alert("Sign up failed. Please try again.");
+        await onSignIn(name, email, password);
       }
-    } else {
-      await onSignIn(name, email);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -73,7 +73,7 @@ export default function AuthPage({ onSignIn, onSignUp, onBack }: AuthPageProps) 
             <button
               type="button"
               id="auth-social-google"
-              onClick={() => onSignIn("Alex Mercer", "alex.mercer@gmail.com")}
+              onClick={() => onSignIn("Alex Mercer", "alex.mercer@gmail.com", "password123")}
               className="flex items-center justify-center gap-2.5 py-3 border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all text-sm font-medium text-slate-700 cursor-pointer"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24">
@@ -88,7 +88,7 @@ export default function AuthPage({ onSignIn, onSignUp, onBack }: AuthPageProps) 
             <button
               type="button"
               id="auth-social-linkedin"
-              onClick={() => onSignIn("Alex Mercer", "alex.mercer@gmail.com")}
+              onClick={() => onSignIn("Alex Mercer", "alex.mercer@gmail.com", "password123")}
               className="flex items-center justify-center gap-2.5 py-3 border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all text-sm font-medium text-slate-700 cursor-pointer"
             >
               <svg className="w-4 h-4 fill-indigo-600" viewBox="0 0 24 24">
@@ -165,9 +165,10 @@ export default function AuthPage({ onSignIn, onSignUp, onBack }: AuthPageProps) 
             <button
               type="submit"
               id="auth-submit-btn"
+              disabled={isSubmitting}
               className="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-3.5 rounded-xl font-semibold shadow-lg shadow-indigo-600/10 transition-all flex items-center justify-center gap-2 cursor-pointer mt-6"
             >
-              <span>{isSignUp ? "Sign Up & Start Coaching" : "Sign In"}</span>
+              <span>{isSubmitting ? "Please wait..." : isSignUp ? "Sign Up & Start Coaching" : "Sign In"}</span>
               <ArrowRight className="w-5 h-5" />
             </button>
           </form>

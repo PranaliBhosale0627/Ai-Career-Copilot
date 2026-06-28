@@ -1,9 +1,15 @@
 import React from "react";
 import { 
   LayoutDashboard, 
+  User,
   FileText, 
   Milestone, 
   Layers, 
+  WandSparkles,
+  BriefcaseBusiness,
+  MessageSquareText,
+  FolderArchive,
+  History,
   Settings as SettingsIcon, 
   LogOut, 
   Sparkles 
@@ -20,9 +26,15 @@ interface SidebarProps {
 export default function Sidebar({ currentView, onViewChange, user, onSignOut }: SidebarProps) {
   const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { id: "resume", label: "Resume Analysis", icon: FileText },
+    { id: "profile", label: "Profile", icon: User },
+    { id: "advisor", label: "AI Career Advisor", icon: WandSparkles },
+    { id: "resume", label: "Resume Generator", icon: FileText },
+    { id: "portfolio", label: "Portfolio Generator", icon: BriefcaseBusiness },
     { id: "roadmap", label: "Career Roadmap", icon: Milestone },
+    { id: "interview", label: "Interview Preparation", icon: MessageSquareText },
     { id: "pipeline", label: "Progress Tracker", icon: Layers },
+    { id: "documents", label: "Saved Documents", icon: FolderArchive },
+    { id: "activity", label: "Activity History", icon: History },
     { id: "settings", label: "Settings", icon: SettingsIcon },
   ];
 

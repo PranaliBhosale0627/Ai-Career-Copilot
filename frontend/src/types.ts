@@ -11,6 +11,16 @@ export interface UserProfile {
   careerInterests: string[];
 }
 
+export interface AuthAccount {
+  id: string;
+  name: string;
+  email: string;
+  role: "user" | "admin";
+  avatar: string;
+  createdAt?: string;
+  lastLoginAt?: string;
+}
+
 export interface JobMatch {
   id: string;
   role: string;
@@ -67,4 +77,37 @@ export interface ChatMessage {
   sender: "user" | "coach";
   text: string;
   timestamp: string;
+}
+
+export interface DashboardSummary {
+  stats: {
+    resumesCreated: number;
+    portfoliosGenerated: number;
+    interviewSessionsCompleted: number;
+    roadmapsCreated: number;
+  };
+  generatedDocuments: Array<{
+    id: string;
+    type: string;
+    title: string;
+    content: any;
+    metadata?: Record<string, any>;
+    createdAt: string;
+  }>;
+  interviewSessions: any[];
+  activityHistory: Array<{
+    id: string;
+    type: string;
+    title: string;
+    description: string;
+    createdAt: string;
+  }>;
+  notifications: Array<{
+    id: string;
+    type: string;
+    title: string;
+    message: string;
+    read: boolean;
+    createdAt: string;
+  }>;
 }

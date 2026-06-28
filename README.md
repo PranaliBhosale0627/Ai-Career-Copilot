@@ -34,6 +34,7 @@ MONGODB_COLLECTION_NAME="app_state"
    MONGODB_URI="mongodb://127.0.0.1:27017"
    MONGODB_DB_NAME="careerco_pilot"
    MONGODB_COLLECTION_NAME="app_state"
+   JWT_SECRET="replace-with-a-long-random-secret"
    ```
 4. Start the backend server:
    ```bash
@@ -69,7 +70,7 @@ MONGODB_COLLECTION_NAME="app_state"
    ```text
    Root Directory: backend
    Runtime: Node
-   Build Command: npm install && npm run build
+   Build Command: npm install --include=dev && npm run build
    Start Command: npm start
    Health Check Path: /health
    ```
@@ -81,6 +82,7 @@ MONGODB_COLLECTION_NAME="app_state"
    MONGODB_COLLECTION_NAME="app_state"
    GEMINI_API_KEY="your-gemini-api-key"
    CORS_ORIGIN="https://your-vercel-app.vercel.app"
+   JWT_SECRET="replace-with-a-long-random-secret"
    ```
 5. Deploy the service and copy the Render URL, for example:
    ```text
@@ -110,3 +112,23 @@ The included `render.yaml` can also be used as a Render Blueprint.
 Locally, the frontend can leave `VITE_API_BASE_URL` empty and use the Vite `/api` proxy to `http://localhost:5000`.
 
 In production, Vercel must set `VITE_API_BASE_URL` to the Render backend URL because the local Vite proxy is not part of the static production build.
+
+---
+
+## User Platform Architecture
+
+The backend now supports authenticated, user-isolated workspaces.
+
+- `/api/auth/register`: creates a user account and private workspace.
+- `/api/auth/login`: verifies credentials and returns a bearer token.
+- `/api/auth/me`: validates the current session.
+- Protected APIs: `/api/user`, `/api/jobs`, `/api/roadmap`, `/api/resume/*`, `/api/coach/*`.
+
+MongoDB collections:
+- `users`: account identity, password hash, role, and login metadata.
+- `workspaces`: one private workspace per user containing profile, jobs, roadmap, resume analysis, stats, generated documents, activity history, and notifications.
+
+Frontend behavior:
+- Logged-in users are redirected to the dashboard.
+- Expired sessions clear the token and return to the login page.
+- Vercel must set `VITE_API_BASE_URL` to the Render backend URL.

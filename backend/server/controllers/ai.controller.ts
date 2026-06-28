@@ -1,15 +1,16 @@
-import { Request, Response } from "express";
-import { getDB, saveDB } from "../config/db";
+import { Response } from "express";
+import { addActivity, addGeneratedDocument, getDB, incrementWorkspaceStat, saveDB } from "../config/db";
 import { getGemini } from "../config/gemini";
+import { AuthenticatedRequest } from "../types/auth";
 
 // GET /api/resume/analysis — Get cached resume analysis results
-export async function getResumeAnalysis(req: Request, res: Response): Promise<void> {
-  const db = await getDB();
+export async function getResumeAnalysis(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const db = await getDB(req.user.id);
   res.json(db.resumeAnalysis);
 }
 
 // POST /api/resume/analyze — Real AI Resume Analysis with Gemini API
-export async function analyzeResume(req: Request, res: Response): Promise<void> {
+export async function analyzeResume(req: AuthenticatedRequest, res: Response): Promise<void> {
   const { resumeText, targetRole } = req.body;
   if (!resumeText) {
     res.status(400).json({ error: "Resume text is required" });
@@ -57,18 +58,26 @@ export async function analyzeResume(req: Request, res: Response): Promise<void> 
     const parsedData = JSON.parse(response.text?.trim() || "{}");
 
     // Supplement data and save to persistent DB
-    const db = await getDB();
+    const db = await getDB(req.user.id);
     db.resumeAnalysis = {
       ...parsedData,
       originalText: resumeText,
     };
-    await saveDB(db);
+    await saveDB(req.user.id, db);
+    await addGeneratedDocument(req.user.id, {
+      type: "resume_analysis",
+      title: `Resume analysis for ${role}`,
+      content: db.resumeAnalysis,
+      metadata: { targetRole: role, atsScore: db.resumeAnalysis.atsScore }
+    });
+    await incrementWorkspaceStat(req.user.id, "resumesCreated");
+    await addActivity(req.user.id, "resume_analyzed", "Resume analyzed", `ATS score: ${db.resumeAnalysis.atsScore}/100 for ${role}.`);
 
     res.json(db.resumeAnalysis);
   } catch (error: any) {
     console.error("Gemini Resume Analysis failed:", error);
     // If Gemini fails (e.g. key missing), fall back to custom-made mock analysis with the input
-    const db = await getDB();
+    const db = await getDB(req.user.id);
     const fallbackScore = Math.floor(Math.random() * 15) + 70; // 70-85
     db.resumeAnalysis = {
       atsScore: fallbackScore,
@@ -100,13 +109,20 @@ export async function analyzeResume(req: Request, res: Response): Promise<void> 
         { skill: "CI/CD Pipelines", status: "match" }
       ]
     };
-    await saveDB(db);
+    await saveDB(req.user.id, db);
+    await addGeneratedDocument(req.user.id, {
+      type: "resume_analysis",
+      title: `Fallback resume analysis for ${role}`,
+      content: db.resumeAnalysis,
+      metadata: { targetRole: role, atsScore: db.resumeAnalysis.atsScore }
+    });
+    await incrementWorkspaceStat(req.user.id, "resumesCreated");
     res.json(db.resumeAnalysis);
   }
 }
 
 // POST /api/coach/message — Real AI Interview Coach Widget
-export async function coachMessage(req: Request, res: Response): Promise<void> {
+export async function coachMessage(req: AuthenticatedRequest, res: Response): Promise<void> {
   const { messages, activeRole } = req.body;
   if (!messages || !Array.isArray(messages)) {
     res.status(400).json({ error: "Conversation history required." });
@@ -160,8 +176,8 @@ export async function coachMessage(req: Request, res: Response): Promise<void> {
 }
 
 // POST /api/jobs/:id/cover-letter — Real AI Cover Letter Generator
-export async function generateCoverLetter(req: Request, res: Response): Promise<void> {
-  const db = await getDB();
+export async function generateCoverLetter(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const db = await getDB(req.user.id);
   const job = db.jobs.find((j: any) => j.id === req.params.id);
   if (!job) {
     res.status(404).json({ error: "Job not found" });
@@ -194,7 +210,14 @@ export async function generateCoverLetter(req: Request, res: Response): Promise<
 
     const letter = response.text || "";
     job.coverLetter = letter;
-    await saveDB(db);
+    await saveDB(req.user.id, db);
+    await addGeneratedDocument(req.user.id, {
+      type: "cover_letter",
+      title: `${job.role} cover letter for ${job.company}`,
+      content: letter,
+      metadata: { jobId: job.id, company: job.company, role: job.role }
+    });
+    await addActivity(req.user.id, "cover_letter_created", "Cover letter generated", `${job.role} at ${job.company}.`);
     res.json({ coverLetter: letter });
   } catch (error: any) {
     console.error("Gemini Cover Letter Generation failed:", error);
@@ -212,13 +235,19 @@ Sincerely,
 Alex Mercer
     `.trim();
     job.coverLetter = fallbackLetter;
-    await saveDB(db);
+    await saveDB(req.user.id, db);
+    await addGeneratedDocument(req.user.id, {
+      type: "cover_letter",
+      title: `${job.role} cover letter for ${job.company}`,
+      content: fallbackLetter,
+      metadata: { jobId: job.id, company: job.company, role: job.role, fallback: true }
+    });
     res.json({ coverLetter: fallbackLetter });
   }
 }
 
 // POST /api/coach/review — Real AI Interview Coach Performance Review / Assessment
-export async function coachReview(req: Request, res: Response): Promise<void> {
+export async function coachReview(req: AuthenticatedRequest, res: Response): Promise<void> {
   const { messages, activeRole } = req.body;
   if (!messages || !Array.isArray(messages)) {
     res.status(400).json({ error: "Conversation history required." });
@@ -261,6 +290,14 @@ export async function coachReview(req: Request, res: Response): Promise<void> {
     });
 
     const report = JSON.parse(response.text?.trim() || "{}");
+    await addGeneratedDocument(req.user.id, {
+      type: "interview_review",
+      title: `${role} interview review`,
+      content: report,
+      metadata: { activeRole: role, score: report.score }
+    });
+    await incrementWorkspaceStat(req.user.id, "interviewSessionsCompleted");
+    await addActivity(req.user.id, "interview_reviewed", "Interview review completed", `${role} score: ${report.score}/100.`);
     res.json(report);
   } catch (error: any) {
     console.error("Gemini Interview Review failed:", error);
@@ -298,7 +335,7 @@ export async function coachReview(req: Request, res: Response): Promise<void> {
 }
 
 // POST /api/coach/hint — Real AI Interview Coach Hint Generator
-export async function coachHint(req: Request, res: Response): Promise<void> {
+export async function coachHint(req: AuthenticatedRequest, res: Response): Promise<void> {
   const { messages, activeRole } = req.body;
   if (!messages || !Array.isArray(messages)) {
     res.status(400).json({ error: "Conversation history required." });
@@ -339,8 +376,8 @@ export async function coachHint(req: Request, res: Response): Promise<void> {
 }
 
 // POST /api/jobs/explain-fit — Real AI Job Match Fit Deep Explainer
-export async function explainFit(req: Request, res: Response): Promise<void> {
-  const db = await getDB();
+export async function explainFit(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const db = await getDB(req.user.id);
   const { role, company, location, salary, notes } = req.body;
   if (!role || !company) {
     res.status(400).json({ error: "Role and Company are required" });
@@ -390,6 +427,13 @@ export async function explainFit(req: Request, res: Response): Promise<void> {
     });
 
     const report = JSON.parse(response.text?.trim() || "{}");
+    await addGeneratedDocument(req.user.id, {
+      type: "job_fit_report",
+      title: `${role} at ${company} fit report`,
+      content: report,
+      metadata: { role, company, matchScore: report.matchScore }
+    });
+    await addActivity(req.user.id, "job_fit_analyzed", "Job fit analyzed", `${role} at ${company}: ${report.matchScore}% match.`);
     res.json(report);
   } catch (error: any) {
     console.error("Gemini Job Fit Explanation failed:", error);
