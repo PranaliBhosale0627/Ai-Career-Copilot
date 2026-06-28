@@ -1,0 +1,6 @@
+{
+  "name": "CareerCo-pilot",
+  "description": "An AI-powered career assistant with professional ATS resume optimizer, structured career roadmap progress tracker, Kanban pipeline, and interactive AI interview coach.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
